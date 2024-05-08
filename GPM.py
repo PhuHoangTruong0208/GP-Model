@@ -74,21 +74,28 @@ class DenseGenerativeWord(nn.Module):
         self.dense_vector_words = [nn.Linear(context_units, vocab_size).to(device) for _ in range(max_sequence_length)]
         self.context_units = context_units
         self.softmax = nn.Softmax(dim=1).to(device)
+        self.max_sequence_length = max_sequence_length
 
     def forward(self, x, context_input):
         context_list, word_predict_list = [], []
-        for layer in self.dense_vector_context:
+        last_context = None
+
+        # lớp tạo biểu diễn ngữ cảnh, và áp dụng ngữ cảnh tổng thể và ngữ cảnh từ
+        for i in range(self.max_sequence_length):
             if not isinstance(context_input, list):
-                x = layer(x + context_input)
+                x = self.dense_vector_context[i](x + context_input)
+                context_input += x
             else:
-                x = layer(x)
+                x = self.dense_vector_context[i](x)
             context_list.append(x)
+            last_context = x
         
-        for i in range(len(context_list)):
+        # lớp dự đoán đầu ra
+        for i in range(self.max_sequence_length):
             context = self.dense_vector_words[i](context_list[i])
             word_predict_list.append(self.softmax(context))
-        return word_predict_list, context_list
-    
+        return word_predict_list, context_list, last_context
+        
 
 class GPMLayer(nn.Module): # GPM -> Generative Private Model
     def __init__(self, max_sequence_length, context_units, vocab_size):
@@ -98,7 +105,7 @@ class GPMLayer(nn.Module): # GPM -> Generative Private Model
 
     def forward(self, x, context_input):
         x = self.to_context_layer(x)
-        x, context_output = self.dense_generative_word(x, context_input)
+        x, context_output, last_context = self.dense_generative_word(x, context_input)
         return x, context_output
 
 
@@ -120,6 +127,7 @@ class GenerativePrivateModel(nn.Module):
                     for context_d in context_l:
                         context_input.append(context_d)
                 context_input = [torch.stack(context_input)]
+            
             # nhận đầu ra và ngữ cảnh đầu ra
             result, context_output = self.model(f, context_input)
             self.context = [context.detach() for context in context_output]
@@ -172,16 +180,14 @@ y_tensor = torch.tensor(y_tensor)
 X_train = x_tensor
 y_train = y_tensor
 
-model = GenerativePrivateModel(max_sequence_length=25, context_units=512, vocab_size=len(tokenizer.index))
+model = GenerativePrivateModel(max_sequence_length=25, context_units=1024, vocab_size=len(tokenizer.index))
 
-criterion = nn.CrossEntropyLoss()
+criterion = nn.CrossEntropyLoss(ignore_index=tokenizer.t_idx[tokenizer.pad])
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
 num_epochs = 300
 for epoch in range(num_epochs):
-    print("Epochs ", epoch)
     model.train()
-    running_loss = 0.0
 
     inputs, labels = X_train, y_train
     optimizer.zero_grad()
@@ -194,12 +200,10 @@ for epoch in range(num_epochs):
     loss.backward(retain_graph=True)
     optimizer.step()
 
-    running_loss += loss.item()
     if (epoch+1) % 10 == 0:
         print("X: chào bạn tên gì")
         print("Y Predict: ", predict(model, inp=" chào bạn tên gì"))
-        print(f'Epoch [{epoch+1}/{num_epochs}], Step [{epoch+1}/{len(X_train)}], Loss: {running_loss/10}')
-        running_loss = 0.0
+    print(f"Epochs {epoch+1} Loss {loss.item()}")
 
 print('Training Finished')
 
