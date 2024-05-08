@@ -61,6 +61,7 @@ class ToVectorContex(nn.Module):
         self.context_layer = nn.Linear(context_units, context_units).to(device)
     
     def forward(self, x):
+        x = x.to(device)
         x = self.embed(x)
         x = self.context_layer(x)
         return x
@@ -188,7 +189,7 @@ for epoch in range(num_epochs):
     outputs = model(inputs)
     # print("đầu ra: ", outputs.view(-1, len(tokenizer.index)).size())
     # print("nhãn: ", labels.view(-1).size())
-    loss = criterion(outputs.view(-1, len(tokenizer.index)), labels.view(-1))
+    loss = criterion(outputs.view(-1, len(tokenizer.index)).to(device), labels.view(-1).to(device))
         
     loss.backward(retain_graph=True)
     optimizer.step()
