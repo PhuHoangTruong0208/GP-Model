@@ -2,6 +2,7 @@ import torch
 from torch import nn, optim
 
 torch.autograd.set_detect_anomaly(True)
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 
 # biến đầu vào thành các token
 class Tokenizer:
@@ -56,8 +57,8 @@ def get_most_vector(tensor):
 class ToVectorContex(nn.Module):
     def __init__(self, context_units, vocab_size):
         super().__init__()
-        self.embed = nn.Embedding(vocab_size, context_units)
-        self.context_layer = nn.Linear(context_units, context_units)
+        self.embed = nn.Embedding(vocab_size, context_units).to(device)
+        self.context_layer = nn.Linear(context_units, context_units).to(device)
     
     def forward(self, x):
         x = self.embed(x)
@@ -68,10 +69,10 @@ class ToVectorContex(nn.Module):
 class DenseGenerativeWord(nn.Module):
     def __init__(self, max_sequence_length, context_units, vocab_size):
         super().__init__()
-        self.dense_vector_context = [nn.Linear(context_units, context_units) for _ in range(max_sequence_length)]
-        self.dense_vector_words = [nn.Linear(context_units, vocab_size) for _ in range(max_sequence_length)]
+        self.dense_vector_context = [nn.Linear(context_units, context_units).to(device) for _ in range(max_sequence_length)]
+        self.dense_vector_words = [nn.Linear(context_units, vocab_size).to(device) for _ in range(max_sequence_length)]
         self.context_units = context_units
-        self.softmax = nn.Softmax(dim=1)
+        self.softmax = nn.Softmax(dim=1).to(device)
 
     def forward(self, x, context_input):
         context_list, word_predict_list = [], []
@@ -147,9 +148,15 @@ def predict(model, inp):
     return sentence
 
             
-x = ["xin chào", "bạn tên là gì", "bạn có khỏe không", "mấy giờ rồi", "khi nào bạn đi", "bạn đang làm gì vậy"]
-y = ["chào <end>", "tôi tên là bot <end>", "tôi khỏe <end>", "12h rồi ạ <end>", "một chút nữa <end>", "tôi đang rãnh không làm gì <end>"]
-tokenizer = Tokenizer(max_sequence_length=10)
+x = ["xin chào", "bạn tên là gì", "bạn có khỏe không", "mấy giờ rồi", "khi nào bạn đi", "bạn đang làm gì vậy",
+     "tạm biệt nha", "chào buổi sáng", "hôm nay bạn định làm gì", "chà hôm nay không làm gì à",
+     "à haha tôi quên"]
+
+y = ["chào <end>", "tôi tên là bot <end>", "tôi khỏe <end>", "12h rồi ạ <end>", "một chút nữa <end>", "tôi đang rãnh không làm gì <end>",
+     "tạm biệt hẹn gặp lại sau <end>", "xin chào chào buổi sáng <end>", "tôi định nấu ăn sau đó đi ngủ <end>",
+     "hôm nay là chủ nhật đấy <end>", "không sao nhưng quên ngày chủ nhật thì lạ thật <end>"]
+
+tokenizer = Tokenizer(max_sequence_length=25)
 x_tensor = []
 y_tensor = []
 
@@ -164,7 +171,7 @@ y_tensor = torch.tensor(y_tensor)
 X_train = x_tensor
 y_train = y_tensor
 
-model = GenerativePrivateModel(max_sequence_length=10, context_units=512, vocab_size=len(tokenizer.index))
+model = GenerativePrivateModel(max_sequence_length=25, context_units=512, vocab_size=len(tokenizer.index))
 
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
